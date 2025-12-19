@@ -1,0 +1,34 @@
+# Hallucination Detection Engine - Configuration
+
+# Model Settings
+models:
+  nli_model: "microsoft/deberta-v3-base"
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+  classifier_model: "models/hallucination_classifier.pt"
+
+# Retrieval Settings
+retrieval:
+  top_k: 5
+  bm25_weight: 0.4
+  semantic_weight: 0.6
+  min_similarity_threshold: 0.5
+
+# Scoring Settings
+scoring:
+  hallucination_threshold: 0.6
+  contradiction_weight: 0.3
+  similarity_weight: 0.4
+  uncertainty_weight: 0.3
+
+# Dataset Paths
+data:
+  truthful_qa: "data/raw/truthful_qa.json"
+  fever: "data/raw/fever.jsonl"
+  halu_eval: "data/raw/halu_eval.json"
+  embeddings_cache: "data/embeddings/"
+
+# Application Settings
+app:
+  port: 8501
+  max_input_length: 1000
+  batch_size: 16
