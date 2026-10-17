@@ -1,218 +1,192 @@
-# 🧠 Hallucination Detection Engine
+# Hallucination Detection Engine
 
-A general-purpose system for detecting unsupported or fabricated LLM outputs through hybrid retrieval-augmented generation, natural language inference, and semantic analysis.
+An evidence-grounded evaluation service for LLM outputs. It breaks a response
+into claims, retrieves the most relevant evidence for each claim, calculates
+support and contradiction signals, and returns an explainable hallucination
+risk report.
 
----
+Unlike a demo that returns one opaque score, this project exposes the evidence,
+claim-level decisions, latency, groundedness, and coverage needed to debug an
+AI system and enforce quality gates in CI.
 
-## 📌 1. Problem Statement
+## Current milestone
 
-Large Language Models (LLMs) often generate plausible-sounding but factually incorrect or unsupported information—a phenomenon known as "hallucination." These fabricated outputs undermine trust in AI systems and can have serious consequences in critical applications. This project addresses the challenge of automatically detecting, scoring, and explaining hallucinated content in LLM-generated text to ensure factual grounding and reliability.
+The repository contains a working deterministic baseline:
 
----
+- validated FastAPI request and response contracts;
+- sentence-level claim extraction;
+- in-memory BM25 evidence retrieval;
+- transparent token-support and explicit-negation contradiction metrics;
+- per-claim evidence attribution;
+- single and batch evaluation endpoints;
+- CLI evaluation;
+- a versioned JSONL benchmark and regression runner;
+- automated tests, linting, and GitHub Actions CI.
 
-## 🎯 2. Project Goals
+The baseline deliberately runs without downloading a large model. Optional
+embedding and NLI adapters are the next milestone and are separated into the
+`ml` dependency group.
 
-- **Detect hallucinations**: Identify unsupported or fabricated statements in LLM outputs
-- **Score factual grounding**: Quantify the degree of factual support for generated claims
-- **Highlight unsupported claims**: Pinpoint specific segments that lack evidence
-- **Provide evidence-backed explanations**: Offer transparent reasoning with retrieved supporting documents
+## Architecture
 
----
+```text
+LLM response + trusted evidence
+              |
+              v
+      Claim segmentation
+              |
+              v
+       BM25 retrieval
+              |
+              v
+  Support + contradiction scoring
+              |
+              v
+Claim evidence, risk, coverage, latency
+              |
+       +------+------+
+       |             |
+   FastAPI         CLI / CI
+```
 
-## 🏗️ 3. System Architecture
+## Quick start
 
-*(Architecture diagram will be added here)*
-
-The system employs a multi-stage pipeline:
-1. **Input Processing**: Parse and segment LLM-generated text
-2. **Hybrid Retrieval**: Combine BM25 and semantic embeddings for evidence retrieval
-3. **Verification Layer**: Apply NLI models to detect contradictions
-4. **Scoring Module**: Calculate hallucination scores using semantic similarity and uncertainty metrics
-5. **Classification**: Final verdict using trained hallucination classifier
-6. **Output Generation**: Structured results with highlighted claims and evidence
-
----
-
-## ⚙️ 4. Features
-
-- **Hybrid RAG (BM25 + embeddings)**: Combines lexical and semantic search for robust evidence retrieval
-- **NLI contradiction detection**: Leverages natural language inference to identify conflicting information
-- **Semantic similarity scoring**: Measures alignment between generated text and retrieved evidence
-- **Uncertainty estimation**: Quantifies model confidence in generated statements
-- **Hallucination classifier**: Binary classification to flag fabricated content
-- **Streamlit UI**: Interactive web interface for real-time hallucination detection
-
----
-
-## 📚 5. Dataset & Evaluation
-
-### Datasets
-
-- **TruthfulQA**: Benchmark for measuring truthfulness in LLM responses
-- **FEVER**: Fact Extraction and VERification dataset
-- **HaluEval**: Specialized hallucination evaluation dataset
-
-### Metrics
-
-- **Accuracy**: Overall correctness of hallucination detection
-- **Precision**: Proportion of correctly identified hallucinations
-- **Coverage**: Percentage of claims verified against evidence base
-- **Contradiction Rate**: Frequency of NLI-detected contradictions
-
----
-
-## 🚀 6. Quick Start
-
-### Prerequisites
+Requires Python 3.11 or newer.
 
 ```bash
-python >= 3.8
-pip
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
-### Installation
+Run the API:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/hallucination-detection-engine.git
-cd hallucination-detection-engine
-
-# Install dependencies
-pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
 ```
 
-### Running the Application
+Open the interactive API documentation at <http://127.0.0.1:8000/docs>.
+
+## API example
 
 ```bash
-# Start the Streamlit UI
-streamlit run app/main.py
-
-# Or use the CLI
-python src/detect.py --input "Your text here"
+curl -X POST http://127.0.0.1:8000/evaluate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "response": "Sydney is the capital of Australia.",
+    "evidence": [
+      {
+        "id": "atlas-1",
+        "text": "Canberra is the capital city of Australia.",
+        "source": "reference atlas"
+      }
+    ]
+  }'
 ```
 
-### Configuration
+The response includes:
 
-Edit `config.yaml` to customize:
-- Model parameters
-- Evidence retrieval settings
-- Scoring thresholds
-- Dataset paths
-
----
-
-## 🖼️ 7. Demo
-
-*(Screenshots/GIFs of the hallucination scoring interface will be added here)*
-
-**Example Interface:**
-- Input text box for LLM-generated content
-- Real-time hallucination score visualization
-- Highlighted unsupported claims
-- Retrieved evidence panel
-- Detailed explanation view
-
----
-
-## 📂 8. Folder Structure
-
-```
-hallucination-detection-engine/
-├── src/
-│   ├── models/           # NLI, classifier, embedding models
-│   ├── retrieval/        # BM25 and semantic search modules
-│   ├── scoring/          # Hallucination scoring logic
-│   ├── utils/            # Helper functions and utilities
-│   └── detect.py         # Main detection pipeline
-├── app/
-│   ├── main.py           # Streamlit application entry point
-│   └── components/       # UI components
-├── data/
-│   ├── raw/              # Original datasets
-│   ├── processed/        # Preprocessed data
-│   └── embeddings/       # Pre-computed embeddings
-├── models/               # Trained model checkpoints
-├── config.yaml           # Configuration file
-├── requirements.txt      # Python dependencies
-└── README.md             # Project documentation
-```
-
----
-
-## 🧪 9. Example Output
-
-### Input Query
-```
-"Explain quantum gravity."
-```
-
-### System Response
 ```json
 {
-  "input_text": "Quantum gravity is a fully unified theory discovered in 1995 by Stephen Hawking that perfectly explains all gravitational phenomena at quantum scales.",
-  "hallucination_score": 0.78,
-  "verdict": "HIGH HALLUCINATION RISK",
-  "unsupported_claims": [
-    "discovered in 1995",
-    "fully unified theory",
-    "perfectly explains all gravitational phenomena"
-  ],
-  "explanation": "Unsupported theoretical claims detected. Quantum gravity remains an unsolved problem in physics with multiple competing approaches (string theory, loop quantum gravity). No unified theory has been established.",
-  "evidence_used": [
-    "Source 1: Stanford Encyclopedia of Philosophy - Quantum Gravity (2023)",
-    "Source 2: Physics Reports - Status of quantum gravity theories",
-    "Source 3: arxiv.org - Recent developments in quantum gravity research"
-  ],
-  "confidence": 0.92
+  "verdict": "high_risk",
+  "hallucination_score": 0.6,
+  "groundedness": 0.4,
+  "coverage": 0.0,
+  "claims_total": 1,
+  "claims_supported": 0,
+  "claims_contradicted": 0,
+  "claims": [
+    {
+      "claim": "Sydney is the capital of Australia.",
+      "supported": false,
+      "contradicted": false,
+      "hallucination_score": 0.6,
+      "evidence": [
+        {
+          "document_id": "atlas-1",
+          "source": "reference atlas",
+          "retrieval_score": 1.0,
+          "support_score": 0.6,
+          "excerpt": "Canberra is the capital city of Australia."
+        }
+      ]
+    }
+  ]
 }
 ```
 
-### Interpretation
-- **Score 0.78**: High probability of hallucination (threshold: 0.6)
-- **Key Issues**: Fabricated dates, overconfident claims, lack of evidence
-- **Evidence**: Retrieved documents contradict several assertions
+Scores are continuous and the complete response also contains ranked evidence
+matches and request latency.
 
----
+## CLI
 
-## 📜 10. Future Work
+Evaluate one response:
 
-- **Add domain-specific modules**: Specialized detectors for medical, legal, and scientific domains
-- **Better uncertainty modeling**: Integrate Bayesian approaches and ensemble methods for improved confidence estimation
-- **Fine-grained claim detection**: Decompose complex statements into atomic claims for more precise verification
-- **Multi-lingual support**: Extend detection capabilities to non-English languages
-- **Real-time monitoring**: Deploy as an API for continuous LLM output verification
-- **Explainability enhancements**: Generate natural language explanations for hallucination verdicts
-- **Active learning pipeline**: Continuously improve models with human feedback
+```bash
+python -m src.detect \
+  --response "Paris is the capital of France." \
+  --evidence "France is a country in Europe and its capital is Paris."
+```
 
----
+Run the versioned benchmark:
 
-## 📄 License
+```bash
+python -m src.evaluate \
+  --dataset data/benchmark.jsonl \
+  --fail-under 0.80 \
+  --output results/latest.json
+```
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+The command reports accuracy, precision, recall, F1, and median latency. It
+returns a non-zero exit status when accuracy drops below the quality threshold,
+making it suitable for deployment gates.
 
----
+## Development
 
-## 👥 Contributors
+```bash
+ruff check .
+pytest
+python -m src.evaluate --fail-under 0.80
+```
 
-- **Mounusha Metti** - Project Lead
+Install optional local ML dependencies with:
 
----
+```bash
+pip install -e ".[dev,ml]"
+```
 
-## 📧 Contact
+They are not required for the baseline and can be large.
 
-For questions, feedback, or collaboration opportunities:
-- Email: your.email@example.com
-- GitHub: [@yourusername](https://github.com/yourusername)
-- LinkedIn: [Your Profile](https://linkedin.com/in/yourprofile)
+## Repository structure
 
----
+```text
+app/main.py                 FastAPI service
+src/engine.py               Evaluation orchestration
+src/detect.py               Single-response CLI
+src/evaluate.py             Benchmark and regression runner
+src/models/schemas.py       Validated contracts
+src/retrieval/hybrid.py     BM25 evidence retrieval
+src/scoring/groundedness.py Explainable scoring
+src/utils/text.py           Claim and token utilities
+data/benchmark.jsonl        Versioned baseline dataset
+tests/                      Unit and API tests
+.github/workflows/ci.yml    Automated quality gate
+```
 
-## 🙏 Acknowledgments
+## Roadmap
 
-- TruthfulQA, FEVER, and HaluEval dataset creators
-- Hugging Face for pre-trained models
-- Open-source NLI and embedding model communities
+1. Sentence-transformer semantic retrieval and score fusion.
+2. DeBERTa NLI entailment/contradiction adapter.
+3. Prompt/model experiment tracking in SQLite.
+4. LLM-as-judge rubric with calibration against human labels.
+5. RAG retrieval metrics, citation validation, and tool-call evaluation.
+6. Web dashboard for run comparison and failure analysis.
+7. FoodPilot integration as the first external evaluated application.
 
----
+## Scope and limitations
 
-**⭐ If you find this project useful, please consider giving it a star!**
+The current scorer is intentionally an explainable lexical baseline. It is
+useful for regression testing and obvious factual support/contradiction cases,
+but paraphrases and subtle reasoning require the planned semantic and NLI
+adapters. The README describes implemented behavior separately from roadmap
+work so benchmark claims remain reproducible.

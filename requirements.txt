@@ -1,27 +1,5 @@
-# Hallucination Detection Engine - Dependencies
-
-# Core ML/NLP Libraries
-transformers>=4.30.0
-torch>=2.0.0
-sentence-transformers>=2.2.0
-
-# Retrieval and Search
-rank-bm25>=0.2.2
-faiss-cpu>=1.7.4
-
-# Data Processing
-pandas>=2.0.0
-numpy>=1.24.0
-datasets>=2.14.0
-
-# Web Interface
-streamlit>=1.25.0
-
-# Utilities
-pyyaml>=6.0
-tqdm>=4.65.0
-scikit-learn>=1.3.0
-
-# Evaluation
-rouge-score>=0.1.2
-nltk>=3.8
+# Lightweight production API. Install the project with `pip install -e .`.
+fastapi>=0.115,<1
+pydantic>=2.9,<3
+pyyaml>=6,<7
+uvicorn>=0.30,<1

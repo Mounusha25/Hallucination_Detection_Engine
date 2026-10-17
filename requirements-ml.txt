@@ -1,0 +1,5 @@
+# Optional local semantic/NLI model stack (Milestone 2).
+-r requirements.txt
+sentence-transformers>=3,<6
+torch>=2.2,<3
+transformers>=4.45,<6
