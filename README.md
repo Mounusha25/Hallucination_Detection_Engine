@@ -38,6 +38,15 @@ Milestone 3 adds a persistent experiment layer:
 - metric deltas against a selected baseline run;
 - a responsive browser dashboard for quality and latency monitoring.
 
+Milestone 4 adds calibrated, multi-dimensional judging:
+
+- correctness, relevance, completeness, and faithfulness rubrics;
+- strict structured output from a local `qwen3:4b-instruct` judge;
+- versioned human labels for repeatable calibration;
+- mean absolute error and tolerance-based agreement by dimension;
+- pass/fail confusion matrices, precision, recall, and F1;
+- case-level judge-versus-human diagnostics saved as experiment runs.
+
 The baseline deliberately runs without downloading a large model and remains
 the default CI quality gate. Hybrid evaluation is an explicit opt-in so a model
 server outage never silently changes deterministic results.
@@ -142,6 +151,23 @@ The response includes:
 Scores are continuous and the complete response also contains ranked evidence
 matches and request latency.
 
+Evaluate response quality across a rubric:
+
+```bash
+curl -X POST http://127.0.0.1:8000/evaluate/rubric \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What is the capital of Australia?",
+    "response": "Canberra is the capital of Australia.",
+    "reference_answer": "Canberra is the capital of Australia.",
+    "evidence": [{"id": "atlas-1", "text": "Canberra is Australia’s capital city."}]
+  }'
+```
+
+The result contains a normalized score, pass/fail decision, and concise
+rationale for each dimension plus an overall score. The model runs locally
+through Ollama; no response data is sent to an external API.
+
 ## CLI
 
 Evaluate one response:
@@ -187,6 +213,21 @@ python -m src.evaluate \
   --output results/hybrid-latest.json
 ```
 
+Calibrate the rubric judge against the versioned human labels:
+
+```bash
+python -m src.calibrate \
+  --dataset data/rubric_calibration.jsonl \
+  --name rubric-qwen3-v1 \
+  --tolerance 0.25 \
+  --fail-under 0.60 \
+  --output results/rubric-calibration.json
+```
+
+This reports mean absolute error, agreement within the selected tolerance,
+per-dimension calibration, a confusion matrix, classification metrics, and
+median latency. It exits non-zero when agreement falls below the quality gate.
+
 ## Experiment dashboard
 
 After recording one or more benchmarks and starting the API, open
@@ -226,7 +267,9 @@ app/main.py                 FastAPI service
 src/engine.py               Evaluation orchestration
 src/detect.py               Single-response CLI
 src/evaluate.py             Benchmark and regression runner
+src/calibrate.py            Human-label calibration runner
 src/experiments.py          SQLite experiment tracking and comparisons
+src/rubrics.py              Multi-dimension rubric orchestration
 src/models/schemas.py       Validated contracts
 src/retrieval/hybrid.py     BM25 evidence retrieval
 src/scoring/groundedness.py Explainable scoring
@@ -234,6 +277,7 @@ src/providers/ollama.py     Local embedding and NLI provider
 src/utils/text.py           Claim and token utilities
 data/benchmark.jsonl        Deterministic baseline dataset
 data/hybrid_benchmark.jsonl Ollama-backed semantic/NLI dataset
+data/rubric_calibration.jsonl Versioned human rubric labels
 tests/                      Unit and API tests
 app/dashboard.html          Browser experiment dashboard
 .github/workflows/ci.yml    Automated quality gate
@@ -242,9 +286,8 @@ app/dashboard.html          Browser experiment dashboard
 ## Roadmap
 
 1. Dedicated DeBERTa NLI and sentence-transformer provider adapters.
-2. LLM-as-judge rubric with calibration against human labels.
-3. RAG retrieval metrics, citation validation, and tool-call evaluation.
-4. FoodPilot integration as the first external evaluated application.
+2. RAG retrieval metrics, citation validation, and tool-call evaluation.
+3. FoodPilot integration as the first external evaluated application.
 
 ## Scope and limitations
 

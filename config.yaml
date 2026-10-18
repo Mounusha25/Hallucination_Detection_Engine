@@ -14,6 +14,13 @@ models:
   embedding_model: "bge-m3"
   nli_provider: "ollama"
   nli_model: "qwen3:4b-instruct"
+  rubric_provider: "ollama"
+  rubric_model: "qwen3:4b-instruct"
+
+rubric:
+  dimensions: ["correctness", "relevance", "completeness", "faithfulness"]
+  pass_threshold: 0.70
+  calibration_tolerance: 0.25
 
 app:
   port: 8000

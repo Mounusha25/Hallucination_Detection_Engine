@@ -1,6 +1,10 @@
 import json
 
-from src.providers.ollama import OllamaEmbeddingProvider, OllamaNLIProvider
+from src.providers.ollama import (
+    OllamaEmbeddingProvider,
+    OllamaNLIProvider,
+    OllamaRubricProvider,
+)
 
 
 class FakeClient:
@@ -36,3 +40,39 @@ def test_nli_provider_parses_structured_result() -> None:
 
     assert result.label == "entailment"
     assert result.confidence == 0.93
+
+
+def test_rubric_provider_parses_scores_in_requested_order() -> None:
+    provider = OllamaRubricProvider(
+        client=FakeClient(
+            [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "relevance": {
+                                        "score": 0.8,
+                                        "rationale": "Directly addresses the question.",
+                                    },
+                                "correctness": {
+                                        "score": 1.0,
+                                        "rationale": "Matches the reference.",
+                                    },
+                            }
+                        )
+                    }
+                }
+            ]
+        )
+    )
+
+    result = provider.judge(
+        question="Question?",
+        response="Answer.",
+        reference_answer="Answer.",
+        evidence=["Answer."],
+        dimensions=["correctness", "relevance"],
+    )
+
+    assert [item.dimension for item in result] == ["correctness", "relevance"]
+    assert result[0].score == 1.0

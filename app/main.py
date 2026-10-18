@@ -9,12 +9,18 @@ from fastapi.responses import HTMLResponse
 
 from src.engine import evaluate
 from src.experiments import compare_runs, get_run, list_runs
-from src.models.schemas import EvaluationRequest, EvaluationResult
+from src.models.schemas import (
+    EvaluationRequest,
+    EvaluationResult,
+    RubricEvaluationRequest,
+    RubricEvaluationResult,
+)
 from src.providers.base import ProviderError
+from src.rubrics import evaluate_rubric
 
 app = FastAPI(
     title="Hallucination Detection Engine",
-    version="0.3.0",
+    version="0.4.0",
     description="Evidence-grounded, claim-level evaluation for LLM outputs.",
 )
 
@@ -24,12 +30,21 @@ def health() -> dict:
     return {
         "status": "ok",
         "service": "hallucination-detection-engine",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "modes": {
             "baseline": {"external_models": False},
             "hybrid": {
                 "embeddings": "ollama:bge-m3",
                 "nli": "ollama:qwen3:4b-instruct",
+            },
+            "rubric": {
+                "judge": "ollama:qwen3:4b-instruct",
+                "dimensions": [
+                    "correctness",
+                    "relevance",
+                    "completeness",
+                    "faithfulness",
+                ],
             },
         },
     }
@@ -72,6 +87,14 @@ def compare_experiment_runs(run_id: Annotated[list[str], Query(min_length=2)]) -
 def evaluate_response(request: EvaluationRequest) -> EvaluationResult:
     try:
         return evaluate(request)
+    except ProviderError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/evaluate/rubric", response_model=RubricEvaluationResult)
+def evaluate_response_with_rubric(request: RubricEvaluationRequest) -> RubricEvaluationResult:
+    try:
+        return evaluate_rubric(request)
     except ProviderError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

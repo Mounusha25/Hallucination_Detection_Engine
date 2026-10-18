@@ -5,7 +5,7 @@ import os
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from src.providers.base import NLIResult, ProviderError
+from src.providers.base import NLIResult, ProviderError, RubricDimension, RubricScore
 
 
 class OllamaClient:
@@ -107,3 +107,84 @@ class OllamaNLIProvider:
         if label not in {"entailment", "contradiction", "neutral"}:
             raise ProviderError(f"Ollama returned an unknown NLI label: {label}")
         return NLIResult(label=label, confidence=max(0.0, min(1.0, confidence)))
+
+
+class OllamaRubricProvider:
+    """Strict multi-dimension rubric judge backed by a local Ollama model."""
+
+    name = "ollama"
+
+    def __init__(
+        self,
+        model: str = "qwen3:4b-instruct",
+        client: OllamaClient | None = None,
+    ):
+        self.model = model
+        self.client = client or OllamaClient()
+
+    def judge(
+        self,
+        *,
+        question: str,
+        response: str,
+        reference_answer: str,
+        evidence: list[str],
+        dimensions: list[RubricDimension],
+    ) -> list[RubricScore]:
+        dimension_text = ", ".join(dimensions)
+        evidence_text = "\n".join(f"- {item}" for item in evidence)
+        prompt = (
+            "Evaluate the candidate response using only the reference answer and trusted "
+            "evidence. Score each requested dimension from 0 to 1. Correctness measures "
+            "factual accuracy, relevance measures whether the response addresses the question, "
+            "completeness measures coverage of the reference answer, and faithfulness measures "
+            "whether claims are supported by evidence. Use strict scores: 1 is fully satisfied, "
+            "0.5 is partially satisfied, and 0 is not satisfied. Give one concise rationale per "
+            f"dimension. Requested dimensions: {dimension_text}.\n\n"
+            f"Question: {question}\nReference answer: {reference_answer}\n"
+            f"Trusted evidence:\n{evidence_text}\n\nCandidate response: {response}"
+        )
+        payload = self.client.post(
+            "/api/chat",
+            {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": "You are a calibrated, evidence-grounded response evaluator.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "format": {
+                    "type": "object",
+                    "properties": {
+                        dimension: {
+                            "type": "object",
+                            "properties": {
+                                "score": {"type": "number", "minimum": 0, "maximum": 1},
+                                "rationale": {"type": "string"},
+                            },
+                            "required": ["score", "rationale"],
+                        }
+                        for dimension in dimensions
+                    },
+                    "required": dimensions,
+                },
+                "stream": False,
+                "think": False,
+                "options": {"temperature": 0, "seed": 42, "num_predict": 500},
+            },
+        )
+        try:
+            raw_scores = json.loads(payload["message"]["content"])
+            parsed = {
+                dimension: RubricScore(
+                    dimension=dimension,
+                    score=max(0.0, min(1.0, float(raw_scores[dimension]["score"]))),
+                    rationale=str(raw_scores[dimension]["rationale"]).strip(),
+                )
+                for dimension in dimensions
+            }
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ProviderError("Ollama returned an invalid rubric response") from exc
+        return [parsed[dimension] for dimension in dimensions]

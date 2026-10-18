@@ -40,7 +40,7 @@
   </header>
   <section class="cards" id="cards"></section>
   <section class="panel" id="comparison" hidden></section>
-  <section class="panel"><table><thead><tr><th>Select</th><th>Run</th><th>Mode</th><th>Accuracy</th><th>F1</th><th>p50 latency</th><th>Created</th></tr></thead><tbody id="runs"></tbody></table><div id="empty" class="empty" hidden>No recorded runs yet. Run the benchmark CLI to create one.</div></section>
+  <section class="panel"><table><thead><tr><th>Select</th><th>Run</th><th>Mode</th><th>Accuracy</th><th>F1</th><th>Calibration</th><th>p50 latency</th><th>Created</th></tr></thead><tbody id="runs"></tbody></table><div id="empty" class="empty" hidden>No recorded runs yet. Run the benchmark CLI to create one.</div></section>
 </main>
 <script>
 const fmt = value => Number(value).toFixed(value === 1 ? 1 : 3);
@@ -59,7 +59,8 @@ async function loadRuns() {
   ].map(([label,value]) => `<div class="card"><div class="label">${label}</div><div class="metric">${value}</div></div>`).join('');
   for (const run of runs) {
     const row = document.createElement('tr'); row.dataset.id = run.id;
-    row.innerHTML = `<td><input type="checkbox" value="${escapeHtml(run.id)}" aria-label="Select ${escapeHtml(run.name)}"></td><td><strong>${escapeHtml(run.name)}</strong><br><small>${escapeHtml(run.id)}</small></td><td><span class="mode">${escapeHtml(run.mode)}</span></td><td>${fmt(run.summary.accuracy)}</td><td>${fmt(run.summary.f1)}</td><td>${fmt(run.summary.p50_latency_ms)} ms</td><td>${new Date(run.created_at).toLocaleString()}</td>`;
+    const calibration = run.summary.mae === undefined ? '—' : `MAE ${fmt(run.summary.mae)} · ${fmt(run.summary.agreement_rate)} agree`;
+    row.innerHTML = `<td><input type="checkbox" value="${escapeHtml(run.id)}" aria-label="Select ${escapeHtml(run.name)}"></td><td><strong>${escapeHtml(run.name)}</strong><br><small>${escapeHtml(run.id)}</small></td><td><span class="mode">${escapeHtml(run.mode)}</span></td><td>${fmt(run.summary.accuracy)}</td><td>${fmt(run.summary.f1)}</td><td>${calibration}</td><td>${fmt(run.summary.p50_latency_ms)} ms</td><td>${new Date(run.created_at).toLocaleString()}</td>`;
     row.querySelector('td:nth-child(2)').onclick = () => window.open(`/runs/${encodeURIComponent(run.id)}`, '_blank'); body.appendChild(row);
   }
 }

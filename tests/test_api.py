@@ -77,3 +77,18 @@ def test_missing_experiment_returns_404(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HALLU_DB_PATH", str(tmp_path / "experiments.db"))
 
     assert client.get("/runs/missing").status_code == 404
+
+
+def test_rubric_endpoint_validates_duplicate_dimensions() -> None:
+    response = client.post(
+        "/evaluate/rubric",
+        json={
+            "question": "What is the capital of France?",
+            "response": "Paris.",
+            "reference_answer": "Paris is the capital of France.",
+            "evidence": [{"id": "geo", "text": "France's capital is Paris."}],
+            "dimensions": ["correctness", "correctness"],
+        },
+    )
+
+    assert response.status_code == 422

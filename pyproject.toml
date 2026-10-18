@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hallucination-detection-engine"
-version = "0.3.0"
+version = "0.4.0"
 description = "Evidence-grounded evaluation for LLM outputs"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -30,6 +30,7 @@ ml = [
 [project.scripts]
 hallu-detect = "src.detect:main"
 hallu-eval = "src.evaluate:main"
+hallu-calibrate = "src.calibrate:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

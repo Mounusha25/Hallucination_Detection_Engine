@@ -26,3 +26,28 @@ class NLIProvider(Protocol):
     model: str
 
     def classify(self, premise: str, hypothesis: str) -> NLIResult: ...
+
+
+RubricDimension = Literal["correctness", "relevance", "completeness", "faithfulness"]
+
+
+@dataclass(frozen=True)
+class RubricScore:
+    dimension: RubricDimension
+    score: float
+    rationale: str
+
+
+class RubricProvider(Protocol):
+    name: str
+    model: str
+
+    def judge(
+        self,
+        *,
+        question: str,
+        response: str,
+        reference_answer: str,
+        evidence: list[str],
+        dimensions: list[RubricDimension],
+    ) -> list[RubricScore]: ...
