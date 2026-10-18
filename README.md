@@ -11,11 +11,18 @@ AI system and enforce quality gates in CI.
 
 ## Current milestone
 
-The repository contains a working deterministic baseline:
+The repository contains two working evaluation modes:
+
+- `baseline`: deterministic BM25 retrieval plus transparent lexical and
+  explicit-negation scoring; no external model is required.
+- `hybrid`: weighted BM25 + `bge-m3` embedding retrieval followed by a
+  structured NLI-style judge using `qwen3:4b-instruct` through local Ollama.
+
+Both modes provide:
 
 - validated FastAPI request and response contracts;
 - sentence-level claim extraction;
-- in-memory BM25 evidence retrieval;
+- in-memory evidence retrieval with per-signal scores;
 - transparent token-support and explicit-negation contradiction metrics;
 - per-claim evidence attribution;
 - single and batch evaluation endpoints;
@@ -23,9 +30,9 @@ The repository contains a working deterministic baseline:
 - a versioned JSONL benchmark and regression runner;
 - automated tests, linting, and GitHub Actions CI.
 
-The baseline deliberately runs without downloading a large model. Optional
-embedding and NLI adapters are the next milestone and are separated into the
-`ml` dependency group.
+The baseline deliberately runs without downloading a large model and remains
+the default CI quality gate. Hybrid evaluation is an explicit opt-in so a model
+server outage never silently changes deterministic results.
 
 ## Architecture
 
@@ -36,10 +43,10 @@ LLM response + trusted evidence
       Claim segmentation
               |
               v
-       BM25 retrieval
+ BM25 or hybrid dense retrieval
               |
               v
-  Support + contradiction scoring
+Support + NLI contradiction scoring
               |
               v
 Claim evidence, risk, coverage, latency
@@ -59,6 +66,14 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
+For hybrid mode, also install [Ollama](https://ollama.com/) and pull the local
+models:
+
+```bash
+ollama pull bge-m3
+ollama pull qwen3:4b-instruct
+```
+
 Run the API:
 
 ```bash
@@ -74,6 +89,7 @@ curl -X POST http://127.0.0.1:8000/evaluate \
   -H "Content-Type: application/json" \
   -d '{
     "response": "Sydney is the capital of Australia.",
+    "mode": "hybrid",
     "evidence": [
       {
         "id": "atlas-1",
@@ -128,6 +144,16 @@ python -m src.detect \
   --evidence "France is a country in Europe and its capital is Paris."
 ```
 
+Use semantic retrieval and NLI judging:
+
+```bash
+python -m src.detect \
+  --mode hybrid \
+  --response "A doctor treats illnesses." \
+  --evidence "Whales live in oceans." \
+  --evidence "A physician treats illnesses and cares for sick people."
+```
+
 Run the versioned benchmark:
 
 ```bash
@@ -140,6 +166,15 @@ python -m src.evaluate \
 The command reports accuracy, precision, recall, F1, and median latency. It
 returns a non-zero exit status when accuracy drops below the quality threshold,
 making it suitable for deployment gates.
+
+Run the separate local-model benchmark after starting Ollama:
+
+```bash
+python -m src.evaluate \
+  --dataset data/hybrid_benchmark.jsonl \
+  --fail-under 0.80 \
+  --output results/hybrid-latest.json
+```
 
 ## Development
 
@@ -167,26 +202,27 @@ src/evaluate.py             Benchmark and regression runner
 src/models/schemas.py       Validated contracts
 src/retrieval/hybrid.py     BM25 evidence retrieval
 src/scoring/groundedness.py Explainable scoring
+src/providers/ollama.py     Local embedding and NLI provider
 src/utils/text.py           Claim and token utilities
-data/benchmark.jsonl        Versioned baseline dataset
+data/benchmark.jsonl        Deterministic baseline dataset
+data/hybrid_benchmark.jsonl Ollama-backed semantic/NLI dataset
 tests/                      Unit and API tests
 .github/workflows/ci.yml    Automated quality gate
 ```
 
 ## Roadmap
 
-1. Sentence-transformer semantic retrieval and score fusion.
-2. DeBERTa NLI entailment/contradiction adapter.
-3. Prompt/model experiment tracking in SQLite.
-4. LLM-as-judge rubric with calibration against human labels.
-5. RAG retrieval metrics, citation validation, and tool-call evaluation.
-6. Web dashboard for run comparison and failure analysis.
-7. FoodPilot integration as the first external evaluated application.
+1. Dedicated DeBERTa NLI and sentence-transformer provider adapters.
+2. Prompt/model experiment tracking in SQLite.
+3. LLM-as-judge rubric with calibration against human labels.
+4. RAG retrieval metrics, citation validation, and tool-call evaluation.
+5. Web dashboard for run comparison and failure analysis.
+6. FoodPilot integration as the first external evaluated application.
 
 ## Scope and limitations
 
-The current scorer is intentionally an explainable lexical baseline. It is
-useful for regression testing and obvious factual support/contradiction cases,
-but paraphrases and subtle reasoning require the planned semantic and NLI
-adapters. The README describes implemented behavior separately from roadmap
-work so benchmark claims remain reproducible.
+The baseline scorer is intentionally lexical and explainable. Hybrid mode adds
+semantic retrieval and a local LLM acting under a strict three-label NLI schema;
+it is not presented as a fine-tuned NLI classifier. A dedicated classifier and
+larger human-labeled benchmarks are planned. The README separates implemented
+behavior from roadmap work so quality claims remain reproducible.

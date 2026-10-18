@@ -13,6 +13,12 @@ def main() -> int:
     parser.add_argument("--response", required=True, help="LLM response to evaluate")
     parser.add_argument("--evidence", action="append", default=[], help="Evidence text; repeatable")
     parser.add_argument("--evidence-file", type=Path, help="JSON list of evidence documents")
+    parser.add_argument(
+        "--mode",
+        choices=["baseline", "hybrid"],
+        default="baseline",
+        help="Hybrid uses local Ollama embeddings and NLI judging.",
+    )
     args = parser.parse_args()
 
     documents = [
@@ -27,7 +33,9 @@ def main() -> int:
     if not documents:
         parser.error("provide --evidence or --evidence-file")
 
-    result = evaluate(EvaluationRequest(response=args.response, evidence=documents))
+    result = evaluate(
+        EvaluationRequest(response=args.response, evidence=documents, mode=args.mode)
+    )
     print(result.model_dump_json(indent=2))
     return int(result.hallucination_score >= 0.50)
 

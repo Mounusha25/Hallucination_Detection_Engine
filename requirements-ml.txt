@@ -1,4 +1,5 @@
-# Optional local semantic/NLI model stack (Milestone 2).
+# Optional dedicated Hugging Face model stack for future provider adapters.
+# Milestone 2's default hybrid mode uses Ollama and does not require this file.
 -r requirements.txt
 sentence-transformers>=3,<6
 torch>=2.2,<3

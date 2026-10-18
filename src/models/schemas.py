@@ -22,9 +22,12 @@ class EvidenceDocument(BaseModel):
 class EvaluationRequest(BaseModel):
     response: str = Field(min_length=1, max_length=20_000)
     evidence: list[EvidenceDocument] = Field(min_length=1, max_length=100)
+    mode: Literal["baseline", "hybrid"] = "baseline"
     support_threshold: float = Field(default=0.70, ge=0, le=1)
     hallucination_threshold: float = Field(default=0.50, ge=0, le=1)
     top_k: int = Field(default=3, ge=1, le=20)
+    lexical_weight: float = Field(default=0.40, ge=0, le=1)
+    semantic_weight: float = Field(default=0.60, ge=0, le=1)
 
     @field_validator("response")
     @classmethod
@@ -39,6 +42,8 @@ class EvidenceMatch(BaseModel):
     document_id: str
     source: str | None = None
     retrieval_score: float = Field(ge=0, le=1)
+    lexical_score: float = Field(ge=0, le=1)
+    semantic_score: float | None = Field(default=None, ge=0, le=1)
     support_score: float = Field(ge=0, le=1)
     excerpt: str
 
@@ -47,11 +52,15 @@ class ClaimEvaluation(BaseModel):
     claim: str
     supported: bool
     contradicted: bool
+    nli_label: Literal["entailment", "contradiction", "neutral"] | None = None
+    nli_confidence: float | None = Field(default=None, ge=0, le=1)
     hallucination_score: float = Field(ge=0, le=1)
     evidence: list[EvidenceMatch]
 
 
 class EvaluationResult(BaseModel):
+    mode: Literal["baseline", "hybrid"]
+    models: dict[str, str]
     verdict: Literal["low_risk", "medium_risk", "high_risk"]
     hallucination_score: float = Field(ge=0, le=1)
     groundedness: float = Field(ge=0, le=1)
