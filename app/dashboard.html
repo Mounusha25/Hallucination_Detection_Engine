@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Evaluation Experiments</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+    body { margin: 0; background: #0b1020; color: #e8ecf4; }
+    main { width: min(1120px, 92vw); margin: 48px auto; }
+    header { display: flex; justify-content: space-between; align-items: end; gap: 20px; }
+    h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.8rem); letter-spacing: -.05em; }
+    p { color: #9aa7bd; }
+    .actions { display: flex; gap: 10px; }
+    button { border: 0; border-radius: 10px; padding: 10px 16px; background: #55d6be; color: #07130f; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #273149; color: #e8ecf4; }
+    .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin: 30px 0; }
+    .card, .panel { background: #141b2d; border: 1px solid #273149; border-radius: 16px; padding: 20px; }
+    .metric { font-size: 2rem; font-weight: 750; margin-top: 8px; }
+    .label { color: #8e9ab0; font-size: .8rem; text-transform: uppercase; letter-spacing: .1em; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 14px 10px; text-align: left; border-bottom: 1px solid #273149; }
+    th { color: #8e9ab0; font-size: .75rem; text-transform: uppercase; }
+    tr[data-id] { cursor: pointer; }
+    tr[data-id]:hover { background: #1a243a; }
+    .mode { padding: 4px 9px; border-radius: 99px; background: #24314a; }
+    .empty { padding: 48px; text-align: center; color: #8e9ab0; }
+    #comparison { margin: 14px 0 28px; }
+    #comparison[hidden] { display: none; }
+    .delta-positive { color: #55d6be; }
+    .delta-negative { color: #ff7d8b; }
+    @media (max-width: 760px) { .cards { grid-template-columns: repeat(2, 1fr); } header { align-items: start; flex-direction: column; } .panel { overflow-x: auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><div class="label">Hallucination Detection Engine</div><h1>Experiment history</h1><p>Compare model quality, latency, and regression runs.</p></div>
+    <div class="actions"><button class="secondary" onclick="loadRuns()">Refresh</button><button onclick="compareSelected()">Compare selected</button></div>
+  </header>
+  <section class="cards" id="cards"></section>
+  <section class="panel" id="comparison" hidden></section>
+  <section class="panel"><table><thead><tr><th>Select</th><th>Run</th><th>Mode</th><th>Accuracy</th><th>F1</th><th>p50 latency</th><th>Created</th></tr></thead><tbody id="runs"></tbody></table><div id="empty" class="empty" hidden>No recorded runs yet. Run the benchmark CLI to create one.</div></section>
+</main>
+<script>
+const fmt = value => Number(value).toFixed(value === 1 ? 1 : 3);
+const escapeHtml = value => String(value).replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
+async function loadRuns() {
+  const response = await fetch('/runs?limit=100');
+  const runs = await response.json();
+  const body = document.querySelector('#runs');
+  body.innerHTML = '';
+  document.querySelector('#empty').hidden = runs.length > 0;
+  if (!runs.length) { document.querySelector('#cards').innerHTML = ''; return; }
+  const latest = runs[0].summary;
+  document.querySelector('#cards').innerHTML = [
+    ['Runs', runs.length], ['Latest accuracy', fmt(latest.accuracy)],
+    ['Latest F1', fmt(latest.f1)], ['Latest p50', `${fmt(latest.p50_latency_ms)} ms`]
+  ].map(([label,value]) => `<div class="card"><div class="label">${label}</div><div class="metric">${value}</div></div>`).join('');
+  for (const run of runs) {
+    const row = document.createElement('tr'); row.dataset.id = run.id;
+    row.innerHTML = `<td><input type="checkbox" value="${escapeHtml(run.id)}" aria-label="Select ${escapeHtml(run.name)}"></td><td><strong>${escapeHtml(run.name)}</strong><br><small>${escapeHtml(run.id)}</small></td><td><span class="mode">${escapeHtml(run.mode)}</span></td><td>${fmt(run.summary.accuracy)}</td><td>${fmt(run.summary.f1)}</td><td>${fmt(run.summary.p50_latency_ms)} ms</td><td>${new Date(run.created_at).toLocaleString()}</td>`;
+    row.querySelector('td:nth-child(2)').onclick = () => window.open(`/runs/${encodeURIComponent(run.id)}`, '_blank'); body.appendChild(row);
+  }
+}
+async function compareSelected() {
+  const ids = [...document.querySelectorAll('#runs input:checked')].map(input => input.value);
+  if (ids.length < 2) { alert('Select at least two runs. The first selected run is the baseline.'); return; }
+  const query = ids.map(id => `run_id=${encodeURIComponent(id)}`).join('&');
+  const response = await fetch(`/compare?${query}`); const comparison = await response.json();
+  const panel = document.querySelector('#comparison'); const candidates = comparison.runs.slice(1);
+  panel.innerHTML = `<div class="label">Compared with ${escapeHtml(comparison.runs[0].name)}</div><h2>Metric deltas</h2><table><thead><tr><th>Candidate</th><th>Accuracy</th><th>F1</th><th>p50 latency</th></tr></thead><tbody>${candidates.map(run => { const delta = comparison.deltas_from_baseline[run.id]; const signed = value => `${value > 0 ? '+' : ''}${fmt(value)}`; return `<tr><td>${escapeHtml(run.name)}</td><td class="${delta.accuracy >= 0 ? 'delta-positive' : 'delta-negative'}">${signed(delta.accuracy)}</td><td class="${delta.f1 >= 0 ? 'delta-positive' : 'delta-negative'}">${signed(delta.f1)}</td><td>${signed(delta.p50_latency_ms)} ms</td></tr>`; }).join('')}</tbody></table>`;
+  panel.hidden = false;
+}
+loadRuns().catch(error => { document.querySelector('#empty').hidden = false; document.querySelector('#empty').textContent = `Could not load runs: ${error}`; });
+</script>
+</body>
+</html>

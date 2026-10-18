@@ -6,6 +6,7 @@ import statistics
 from pathlib import Path
 
 from src.engine import evaluate
+from src.experiments import DEFAULT_DATABASE, record_run
 from src.models.schemas import EvaluationRequest
 
 
@@ -40,8 +41,10 @@ def run_benchmark(path: Path, threshold: float = 0.50) -> dict:
     precision = _safe_divide(true_positive, true_positive + false_positive)
     recall = _safe_divide(true_positive, true_positive + false_negative)
     f1 = _safe_divide(2 * precision * recall, precision + recall)
+    modes = {row.get("request", {}).get("mode", "baseline") for row in rows}
     return {
         "dataset": str(path),
+        "mode": modes.pop() if len(modes) == 1 else "mixed",
         "summary": {
             "cases": len(results),
             "accuracy": round(statistics.mean(r["correct"] for r in results), 4),
@@ -59,12 +62,23 @@ def main() -> int:
     parser.add_argument("--dataset", type=Path, default=Path("data/benchmark.jsonl"))
     parser.add_argument("--fail-under", type=float, default=0.80)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--name", help="Experiment name; defaults to the dataset filename")
+    parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE)
+    parser.add_argument("--no-record", action="store_true", help="Do not save this run to SQLite")
     args = parser.parse_args()
     report = run_benchmark(args.dataset)
     print(json.dumps(report["summary"], indent=2))
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(report, indent=2) + "\n")
+    if not args.no_record:
+        run = record_run(
+            report,
+            name=args.name or args.dataset.stem,
+            threshold=args.fail_under,
+            database=args.database,
+        )
+        print(f"Recorded experiment {run['id']} in {args.database}")
     return int(report["summary"]["accuracy"] < args.fail_under)
 
 

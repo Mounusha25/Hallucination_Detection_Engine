@@ -17,4 +17,4 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check .
       - run: pytest
-      - run: python -m src.evaluate --fail-under 0.80
+      - run: python -m src.evaluate --fail-under 0.80 --no-record

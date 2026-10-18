@@ -30,6 +30,14 @@ Both modes provide:
 - a versioned JSONL benchmark and regression runner;
 - automated tests, linting, and GitHub Actions CI.
 
+Milestone 3 adds a persistent experiment layer:
+
+- automatic SQLite tracking for benchmark runs;
+- named experiments with dataset, mode, threshold, metrics, and case-level results;
+- run history, detail, and comparison APIs;
+- metric deltas against a selected baseline run;
+- a responsive browser dashboard for quality and latency monitoring.
+
 The baseline deliberately runs without downloading a large model and remains
 the default CI quality gate. Hybrid evaluation is an explicit opt-in so a model
 server outage never silently changes deterministic results.
@@ -159,29 +167,48 @@ Run the versioned benchmark:
 ```bash
 python -m src.evaluate \
   --dataset data/benchmark.jsonl \
+  --name baseline-v1 \
   --fail-under 0.80 \
   --output results/latest.json
 ```
 
-The command reports accuracy, precision, recall, F1, and median latency. It
-returns a non-zero exit status when accuracy drops below the quality threshold,
-making it suitable for deployment gates.
+The command reports accuracy, precision, recall, F1, and median latency, then
+records the experiment in `data/experiments.db`. Pass `--no-record` for an
+ephemeral CI run. It returns a non-zero exit status when accuracy drops below
+the quality threshold, making it suitable for deployment gates.
 
 Run the separate local-model benchmark after starting Ollama:
 
 ```bash
 python -m src.evaluate \
   --dataset data/hybrid_benchmark.jsonl \
+  --name hybrid-qwen3-bge-m3 \
   --fail-under 0.80 \
   --output results/hybrid-latest.json
 ```
+
+## Experiment dashboard
+
+After recording one or more benchmarks and starting the API, open
+<http://127.0.0.1:8000/dashboard>. The dashboard displays the latest quality
+and latency metrics and a searchable history source through these APIs:
+
+```text
+GET /runs?limit=50
+GET /runs/{run_id}
+GET /compare?run_id={baseline_id}&run_id={candidate_id}
+```
+
+The first ID passed to `/compare` is treated as the baseline. The response
+contains accuracy, precision, recall, F1, and latency deltas for every candidate.
+Set `HALLU_DB_PATH` to use a database outside the default `data/experiments.db`.
 
 ## Development
 
 ```bash
 ruff check .
 pytest
-python -m src.evaluate --fail-under 0.80
+python -m src.evaluate --fail-under 0.80 --no-record
 ```
 
 Install optional local ML dependencies with:
@@ -199,6 +226,7 @@ app/main.py                 FastAPI service
 src/engine.py               Evaluation orchestration
 src/detect.py               Single-response CLI
 src/evaluate.py             Benchmark and regression runner
+src/experiments.py          SQLite experiment tracking and comparisons
 src/models/schemas.py       Validated contracts
 src/retrieval/hybrid.py     BM25 evidence retrieval
 src/scoring/groundedness.py Explainable scoring
@@ -207,17 +235,16 @@ src/utils/text.py           Claim and token utilities
 data/benchmark.jsonl        Deterministic baseline dataset
 data/hybrid_benchmark.jsonl Ollama-backed semantic/NLI dataset
 tests/                      Unit and API tests
+app/dashboard.html          Browser experiment dashboard
 .github/workflows/ci.yml    Automated quality gate
 ```
 
 ## Roadmap
 
 1. Dedicated DeBERTa NLI and sentence-transformer provider adapters.
-2. Prompt/model experiment tracking in SQLite.
-3. LLM-as-judge rubric with calibration against human labels.
-4. RAG retrieval metrics, citation validation, and tool-call evaluation.
-5. Web dashboard for run comparison and failure analysis.
-6. FoodPilot integration as the first external evaluated application.
+2. LLM-as-judge rubric with calibration against human labels.
+3. RAG retrieval metrics, citation validation, and tool-call evaluation.
+4. FoodPilot integration as the first external evaluated application.
 
 ## Scope and limitations
 
