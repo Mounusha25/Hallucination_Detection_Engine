@@ -1,5 +1,7 @@
 # Hallucination Detection Engine
 
+![Hallucination Detection Engine banner](banner.png)
+
 An evidence-grounded evaluation service for LLM outputs. It breaks a response
 into claims, retrieves the most relevant evidence for each claim, calculates
 support and contradiction signals, and returns an explainable hallucination
